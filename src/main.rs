@@ -78,32 +78,23 @@ impl Div for Expr {
     }
 }
 
-impl AddAssign for Expr {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = self.clone() + rhs;
+macro_rules! assigning_operator {
+    ($trait_name:ty, $func_name:ident, $token:tt) => {
+        impl $trait_name for Expr {
+            fn $func_name(&mut self, rhs: Self) {
+                *self = self.clone() $token rhs;
+            }
+        }
     }
 }
 
-impl MulAssign for Expr {
-    fn mul_assign(&mut self, rhs: Self) {
-        *self = self.clone() * rhs;
-    }
-}
-
-impl SubAssign for Expr {
-    fn sub_assign(&mut self, rhs: Self) {
-        *self = self.clone() - rhs;
-    }
-}
-
-impl DivAssign for Expr {
-    fn div_assign(&mut self, rhs: Self) {
-        *self = self.clone() / rhs;
-    }
-}
+assigning_operator!(AddAssign, add_assign, +);
+assigning_operator!(MulAssign, mul_assign, *);
+assigning_operator!(SubAssign, sub_assign, -);
+assigning_operator!(DivAssign, div_assign, /);
 
 fn main() {
     let mut e = Expr::X;
-    e /= Expr::X;
+    e -= Expr::X - Expr::X;
     println!("{:?}", e);
 }
