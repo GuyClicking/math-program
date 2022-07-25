@@ -1,3 +1,10 @@
+//! This library defines the `Expr` type, where mathematical expressions can be created. It then
+//! implements operations that can be applied to these expressions.
+
+#![warn(missing_docs)]
+#![warn(rustdoc::missing_doc_code_examples)]
+#![allow(dead_code)]
+
 use std::ops::*;
 
 type Num = isize;
@@ -5,14 +12,27 @@ type Num = isize;
 /// An expression type! All mathematical expressions should be able to be expressed with this type.
 /// This type is essentially an AST (abstract syntax tree).
 #[derive(Debug, PartialEq, Eq, Clone)]
-enum Expr {
+pub enum Expr {
+    /// A constant value (e.g. 1, 6, 15)
     Const(Num),
+    /// Simply an X variable.
+    /// This might be changed to an id based variable or something (because you will often want
+    /// more variables than just x in expressions).
     X,
+    /// The sum of each expression in the vector.
     Sum(Vec<Expr>),
+    /// The product of each expression in the vector.
     Prod(Vec<Expr>),
+    /// The negative value of the expression.
     Neg(Box<Expr>),
-    // Reciprocal
+    /// The reciprocal of the value (i.e. 1 divided by the expression).
     Recip(Box<Expr>),
+}
+
+impl Expr {
+    fn like_terms_with(&self, term: &Expr) -> bool {
+        todo!()
+    }
 }
 
 impl Add for Expr {
@@ -23,7 +43,6 @@ impl Add for Expr {
             Expr::Sum(v) => {
                 let mut v = v;
                 v.push(rhs);
-                // TODO simplify equation
                 v
             }
             _ => {
@@ -41,7 +60,6 @@ impl Mul for Expr {
             Expr::Prod(v) => {
                 let mut v = v;
                 v.push(rhs);
-                // TODO simplify expression
                 v
             }
             _ => {
@@ -135,6 +153,10 @@ impl Expr {
 impl Expr {
     // TODO list all simplifications that this function applies
     // TODO separate all of the simplifications into other functions
+    /// Apply all simplification techniques to an expression (INCOMPLETE!)
+    ///
+    /// List of applied simplifications:
+    /// [`Expr::simplify_sums_in_sums`]
     pub fn simplify(&mut self) {
         match self {
             Expr::Sum(v) => {
@@ -143,19 +165,7 @@ impl Expr {
                     e.simplify();
                 }
 
-                // If there is an Expr::Sum in v, grab the vector in the Sum and append it to v.
-                // Then remove the Expr::Sum value.
-                // Im sure there's a better way to implement this
-                let mut i = 0;
-                while i < v.len() {
-                    if let Expr::Sum(e) = &v[i] {
-                        let mut e = e.clone();
-                        v.append(&mut e);
-                        v.remove(i);
-                    } else {
-                        i += 1;
-                    }
-                }
+                self.simplify_sums_in_sums();
 
                 // Turn addition into multiplication or something
                 // x + 2x = 3x for example
@@ -174,6 +184,53 @@ impl Expr {
             }
             _ => unimplemented!(),
         };
+    }
+
+    /// This function simplifies [`Expr::Sum`] expressions which have [`Expr::Sum`] values in their
+    /// own vector. For example, you could have `3 + (5 - 2)`, which would then be simplified to
+    /// `3 + 5 - 2`.
+    pub fn simplify_sums_in_sums(&mut self) {
+        if let Expr::Sum(v) = self {
+            // If there is an Expr::Sum in v, grab the vector in this internal Sum and append it to
+            // v. Then remove the Expr::Sum value.
+            //
+            // I'm sure there's a better way to implement this!
+            let mut i = 0;
+            while i < v.len() {
+                if let Expr::Sum(e) = &v[i] {
+                    let mut e = e.clone();
+                    v.append(&mut e);
+                    v.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    /// This function simplifies [`Expr::Sum`] expressions which contain like terms which can be
+    /// added together. For example, you could have `x + 2 + 2x + 4`, which would simplify to
+    /// `3x + 6`. (INCOMPLETE!!)
+    pub fn simplify_apply_sums(&mut self) {
+        if let Expr::Sum(v) = self {
+            let mut i = 1;
+            while i < v.len() {
+                let mut j = 0;
+                while j < i {
+                    if v[i].like_terms_with(&v[j]) {
+                        let e = v[i].clone();
+                        // Cant do this because it doesnt add the coefficients balbhalbalh
+                        v[j] += e;
+                        v[j].simplify();
+                        v.remove(i);
+                        i -= 1;
+                        break;
+                    }
+                    j += 1;
+                }
+                i += 1;
+            }
+        }
     }
 }
 
