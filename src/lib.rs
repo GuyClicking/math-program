@@ -260,6 +260,7 @@ impl Expr {
     /// [`Expr::simplify_cancel_fracs`]
     /// [`Expr::simplify_mult_consts`]
     /// [`Expr::simplify_mult_pows`]
+    /// [`Expr::simplify_zero_pow`]
     pub fn simplify(&mut self) {
         match self {
             Expr::Sum(_) => {
@@ -291,6 +292,8 @@ impl Expr {
             }
             Expr::Pow(_, _) => {
                 self.simplify_terms();
+
+                self.simplify_zero_pow();
             }
             _ => (),
         };
@@ -509,6 +512,16 @@ impl Expr {
             }
         }
     }
+
+    /// This function turns expressions to the power of 0 to 1
+    /// e.g. `x^0 = 1`
+    pub fn simplify_zero_pow(&mut self) {
+        if let Expr::Pow(_, b) = self {
+            if **b == Expr::Const(0) {
+                *self = Expr::Const(1);
+            }
+        }
+    }
 }
 
 impl Expr {
@@ -526,6 +539,17 @@ impl Expr {
                 a.clone() * b.derivative() + b * a.derivative()
             }
             Expr::Neg(e) => Expr::Neg(Box::new(e.derivative())),
+            // Power rule
+            Expr::Pow(a, b) if matches!(**b, Expr::Const(_)) => {
+                if **b == Expr::Const(0) {
+                    return Expr::Const(0);
+                }
+                if **b == Expr::Const(1) {
+                    return a.clone().derivative();
+                }
+                let dec = *b.clone() - Expr::Const(1);
+                Expr::Prod(vec![dec.clone(), Expr::Pow(a.clone(), Box::new(dec))])
+            }
             _ => todo!(),
         }
     }
