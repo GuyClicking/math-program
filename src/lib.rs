@@ -27,6 +27,8 @@ pub enum Expr {
     Neg(Box<Expr>),
     /// The reciprocal of the value (i.e. 1 divided by the expression).
     Recip(Box<Expr>),
+    /// One expression to the power of another (a^b)
+    Pow(Box<Expr>, Box<Expr>),
 }
 
 impl Expr {
@@ -65,13 +67,7 @@ impl Expr {
                 Expr::Prod(b) => b.contains(self),
                 _ => false,
             },
-            Expr::Const(_) => {
-                if let Expr::Const(_) = term {
-                    true
-                } else {
-                    false
-                }
-            }
+            Expr::Const(_) => matches!(term, Expr::Const(_)),
             _ => match term {
                 Expr::Prod(b) => b.contains(self),
                 _ => self == term,
@@ -121,7 +117,7 @@ impl Expr {
 
     fn recip(self) -> Self {
         match self {
-            Expr::Recip(e) => *e.clone(),
+            Expr::Recip(e) => *e,
             _ => Expr::Recip(Box::new(self.clone())),
         }
     }
@@ -247,6 +243,9 @@ impl Expr {
                 }
                 str
             }
+            Expr::Pow(a, b) => {
+                format!("{}^{{{}}}", &a.to_latex(), &b.to_latex())
+            }
         }
     }
 }
@@ -260,13 +259,12 @@ impl Expr {
     /// [`Expr::simplify_apply_sums`]
     /// [`Expr::simplify_cancel_fracs`]
     /// [`Expr::simplify_mult_consts`]
+    /// [`Expr::simplify_mult_pows`]
     pub fn simplify(&mut self) {
         match self {
-            Expr::Sum(v) => {
+            Expr::Sum(_) => {
                 // Simplify all of the terms in the sum first, then simplify the whole sum
-                for e in v.iter_mut() {
-                    e.simplify();
-                }
+                self.simplify_terms();
 
                 self.simplify_sums_in_sums();
 
@@ -274,11 +272,9 @@ impl Expr {
 
                 self.simplify_singleton();
             }
-            Expr::Prod(v) => {
+            Expr::Prod(_) => {
                 // Simplify all of the terms
-                for e in v.iter_mut() {
-                    e.simplify();
-                }
+                self.simplify_terms();
 
                 // Cancel out fractions!
                 self.simplify_cancel_fracs();
@@ -287,7 +283,14 @@ impl Expr {
                 self.simplify_mult_consts();
                 // Also simplify fraction of constants
 
+                // Turn products of terms into exponents of those terms
+                self.simplify_mult_pows();
+                self.simplify_terms();
+
                 self.simplify_singleton();
+            }
+            Expr::Pow(_, _) => {
+                self.simplify_terms();
             }
             _ => (),
         };
@@ -300,6 +303,28 @@ impl Expr {
             }
             _ => (),
         };
+    }
+
+    /// This function simplifies all of the terms in an expression. For example, it may simplify
+    /// all terms in a sum.
+    pub fn simplify_terms(&mut self) {
+        match self {
+            Expr::Sum(v) => {
+                for e in v.iter_mut() {
+                    e.simplify();
+                }
+            }
+            Expr::Prod(v) => {
+                for e in v.iter_mut() {
+                    e.simplify();
+                }
+            }
+            Expr::Pow(a, b) => {
+                a.simplify();
+                b.simplify();
+            }
+            _ => (),
+        }
     }
 
     /// This function turns sums or products with a singular term into just their term.
@@ -395,6 +420,72 @@ impl Expr {
         }
     }
 
+    /// This function multiplies equal terms to create powers of those terms.
+    /// e.g. `x^5 * x^-2 = x^3`
+    // Yikes! This is ugly!
+    pub fn simplify_mult_pows(&mut self) {
+        if let Expr::Prod(v) = self {
+            let mut i = 1;
+            while i < v.len() {
+                match v[i].clone() {
+                    Expr::Pow(a, b) => {
+                        let mut j = 0;
+                        while j < i {
+                            match &mut v[j] {
+                                Expr::Pow(c, d) => {
+                                    if *c == a {
+                                        *d = Box::new(*b.clone() + *d.clone());
+                                        v.remove(i);
+                                        i -= 1;
+                                        break;
+                                    }
+                                }
+                                _ => {
+                                    if *a == v[i] {
+                                        v[j] = Expr::Pow(a, Box::new(*b.clone() + Expr::Const(1)));
+                                        v.remove(i);
+                                        i -= 1;
+                                        break;
+                                    }
+                                }
+                            };
+                            j += 1;
+                        }
+                    }
+                    _ => {
+                        let mut j = 0;
+                        while j < i {
+                            let val = v[i].clone();
+                            match &mut v[j] {
+                                Expr::Pow(c, d) => {
+                                    if **c == val {
+                                        *d = Box::new(*d.clone() + Expr::Const(1));
+                                        v.remove(i);
+                                        i -= 1;
+                                        break;
+                                    }
+                                }
+                                _ => {
+                                    if v[i] == v[j] {
+                                        v[j] = Expr::Pow(
+                                            Box::new(v[j].clone()),
+                                            Box::new(Expr::Const(2)),
+                                        );
+                                        v.remove(i);
+                                        i -= 1;
+                                        break;
+                                    }
+                                }
+                            }
+                            j += 1;
+                        }
+                    }
+                };
+                i += 1;
+            }
+        }
+    }
+
     /// This fuction cancels out terms in a fraction
     /// e.g. `5x/x = 5`
     pub fn simplify_cancel_fracs(&mut self) {
@@ -416,6 +507,26 @@ impl Expr {
                 }
                 i += inc;
             }
+        }
+    }
+}
+
+impl Expr {
+    /// Find the derivative of an expression.
+    pub fn derivative(&self) -> Self {
+        match self {
+            Expr::Const(_) => Expr::Const(0),
+            Expr::X => Expr::Const(1),
+            Expr::Sum(v) => Expr::Sum(v.iter().map(|x| x.derivative()).collect()),
+            // Product rule
+            Expr::Prod(v) => {
+                let a = &v[0];
+                let b = Expr::Prod(v[1..].to_vec());
+
+                a.clone() * b.derivative() + b * a.derivative()
+            }
+            Expr::Neg(e) => Expr::Neg(Box::new(e.derivative())),
+            _ => todo!(),
         }
     }
 }
@@ -475,6 +586,17 @@ mod tests {
         let mut e = Expr::Const(6) * Expr::X * Expr::Const(5);
         e.simplify();
         assert_eq!(e, Expr::Prod(vec![Expr::Const(30), Expr::X]));
+
+        // Multiply into powers
+        let mut e = Expr::X * Expr::X;
+        e.simplify();
+        assert_eq!(e, Expr::Pow(Box::new(Expr::X), Box::new(Expr::Const(2))));
+        e *= Expr::X;
+        e.simplify();
+        assert_eq!(e, Expr::Pow(Box::new(Expr::X), Box::new(Expr::Const(3))));
+        e *= e.clone();
+        e.simplify();
+        assert_eq!(e, Expr::Pow(Box::new(Expr::X), Box::new(Expr::Const(6))));
 
         // Fraction cancellation 1
         let mut e = Expr::X / Expr::X;
