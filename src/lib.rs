@@ -25,8 +25,6 @@ pub enum Expr {
     Prod(Vec<Expr>),
     /// The negative value of the expression.
     Neg(Box<Expr>),
-    /// The reciprocal of the value (i.e. 1 divided by the expression).
-    Recip(Box<Expr>),
     /// One expression to the power of another (a^b)
     Pow(Box<Expr>, Box<Expr>),
 }
@@ -117,8 +115,8 @@ impl Expr {
 
     fn recip(self) -> Self {
         match self {
-            Expr::Recip(e) => *e,
-            _ => Expr::Recip(Box::new(self.clone())),
+            Expr::Pow(a,b) => Expr::Pow(a, Box::new(-*b)),
+            _ => Expr::Pow(Box::new(self.clone()), Box::new(Expr::Const(-1))),
         }
     }
 }
@@ -181,7 +179,7 @@ impl Div for Expr {
 
     #[allow(clippy::suspicious_arithmetic_impl)]
     fn div(self, rhs: Self) -> Self {
-        self * Expr::Recip(Box::new(rhs))
+        self * rhs.recip()
     }
 }
 
@@ -202,12 +200,13 @@ assigning_operator!(DivAssign, div_assign, /);
 
 impl Expr {
     /// Write an expression as a latex math equation.
+    // TODO negative indecies as fractions
     pub fn to_latex(&self) -> String {
         match self {
             Expr::Const(n) => n.to_string(),
             Expr::X => "x".to_string(),
             Expr::Neg(e) => format!("-{}", e.to_latex()),
-            Expr::Recip(e) => format!("\\frac{{1}}{{{}}}", e.to_latex()),
+            // Expr::Recip(e) => format!("\\frac{{1}}{{{}}}", e.to_latex()),
             Expr::Sum(v) => {
                 let mut str = v[0].to_latex();
                 for e in v.iter().skip(1) {
@@ -261,6 +260,7 @@ impl Expr {
     /// [`Expr::simplify_mult_consts`]
     /// [`Expr::simplify_mult_pows`]
     /// [`Expr::simplify_zero_pow`]
+    /// [`Expr::simplify_one_pow`]
     pub fn simplify(&mut self) {
         match self {
             Expr::Sum(_) => {
@@ -294,6 +294,7 @@ impl Expr {
                 self.simplify_terms();
 
                 self.simplify_zero_pow();
+                self.simplify_one_pow();
             }
             _ => (),
         };
@@ -444,7 +445,7 @@ impl Expr {
                                     }
                                 }
                                 _ => {
-                                    if *a == v[i] {
+                                    if *a == v[j] {
                                         v[j] = Expr::Pow(a, Box::new(*b.clone() + Expr::Const(1)));
                                         v.remove(i);
                                         i -= 1;
@@ -519,6 +520,16 @@ impl Expr {
         if let Expr::Pow(_, b) = self {
             if **b == Expr::Const(0) {
                 *self = Expr::Const(1);
+            }
+        }
+    }
+
+    /// This function turns expressions to the power of 1 to x
+    /// e.g. `x^x = x`
+    pub fn simplify_one_pow(&mut self) {
+        if let Expr::Pow(a, b) = self {
+            if **b == Expr::Const(1) {
+                *self = *a.clone();
             }
         }
     }
@@ -621,6 +632,9 @@ mod tests {
         e *= e.clone();
         e.simplify();
         assert_eq!(e, Expr::Pow(Box::new(Expr::X), Box::new(Expr::Const(6))));
+        e = Expr::X * e.clone();
+        e.simplify();
+        assert_eq!(e, Expr::Pow(Box::new(Expr::X), Box::new(Expr::Const(7))));
 
         // Fraction cancellation 1
         let mut e = Expr::X / Expr::X;
