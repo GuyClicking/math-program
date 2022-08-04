@@ -1,3 +1,3 @@
-mod lib;
+pub mod lib;
 
 fn main() {}
