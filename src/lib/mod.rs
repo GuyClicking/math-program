@@ -4,6 +4,8 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_doc_code_examples)]
 
+mod derivative;
+mod latex;
 mod operations;
 
 type Num = isize;
@@ -42,85 +44,31 @@ pub enum Expr {
 
 impl Expr {
     /// Get the reciprocal of an expression (i.e. 1/x)
-    pub fn recip(&self) -> Self {
+    pub fn recip(self) -> Self {
         match self {
-            Expr::Pow(a, b) => Expr::Pow(a.clone(), Box::new(-*b.clone())),
-            _ => Expr::Pow(Box::new(self.clone()), Box::new(Expr::Const(-1))),
+            Expr::Pow(a, b) => a.pow(-*b),
+            _ => self.pow(Expr::Const(-1)),
         }
+    }
+
+    /// Raise an expression to a power
+    pub fn pow(self, b: Expr) -> Self {
+        Expr::Pow(Box::new(self), Box::new(b))
     }
 
     /// Get the ln of an expression
-    pub fn ln(&self) -> Self {
-        Expr::Ln(Box::new(self.clone()))
+    pub fn ln(self) -> Self {
+        Expr::Ln(Box::new(self))
     }
-}
 
-impl Expr {
-    /// Write an expression as a latex math equation.
-    // TODO negative indecies as fractions
-    pub fn to_latex(&self) -> String {
-        match self {
-            Expr::Const(n) => n.to_string(),
-            Expr::X => "x".to_string(),
-            Expr::Neg(e) => format!("-{}", e.to_latex()),
-            // Expr::Recip(e) => format!("\\frac{{1}}{{{}}}", e.to_latex()),
-            Expr::Sum(v) => {
-                let mut str = v[0].to_latex();
-                for e in v.iter().skip(1) {
-                    if let Expr::Neg(e) = e {
-                        str += "-";
-                        str += &e.to_latex();
-                    } else {
-                        str += "+";
-                        str += &e.to_latex();
-                    }
-                }
-                str
-            }
-            Expr::Prod(v) => {
-                let mut str = if v[0] == Expr::Const(1) {
-                    "".to_string()
-                } else {
-                    v[0].to_latex()
-                };
-                for e in v.iter().skip(1) {
-                    if matches!(e, Expr::Sum(_)) || matches!(e, Expr::Const(_)) {
-                        if let Expr::Const(e) = e {
-                            if *e == 1 {
-                                continue;
-                            }
-                        }
-                        str += "(";
-                        str += &e.to_latex();
-                        str += ")";
-                    } else {
-                        str += &e.to_latex();
-                    }
-                }
-                str
-            }
-            Expr::Pow(a, b) => {
-                format!("{}^{{{}}}", &a.to_latex(), &b.to_latex())
-            }
-            Expr::Ln(x) => {
-                format!("ln{}", &x.to_latex())
-            }
-            Expr::Sin(x) => {
-                format!("sin{}", &x.to_latex())
-            }
-            Expr::Cos(x) => {
-                format!("cos{}", &x.to_latex())
-            }
-            Expr::Arcsin(x) => {
-                format!("arcsin{}", &x.to_latex())
-            }
-            Expr::Arccos(x) => {
-                format!("arccos{}", &x.to_latex())
-            }
-            Expr::Arctan(x) => {
-                format!("arctan{}", &x.to_latex())
-            }
-        }
+    /// Get the sin of an expression
+    pub fn sin(self) -> Self {
+        Expr::Sin(Box::new(self))
+    }
+
+    /// Get the cos of an expression
+    pub fn cos(self) -> Self {
+        Expr::Cos(Box::new(self))
     }
 }
 
@@ -156,6 +104,7 @@ impl Expr {
             Expr::Neg(_) => {
                 self.simplify_negative_consts();
             }
+            // Dont do this!
             _ => (),
         };
         match self {
@@ -246,79 +195,9 @@ impl Expr {
     }
 }
 
-impl Expr {
-    /// Find the derivative of an expression.
-    pub fn derivative(&self) -> Self {
-        match self {
-            // The derivative of a constant is 0
-            Expr::Const(_) => Expr::Const(0),
-            // The derivative of x is 1
-            Expr::X => Expr::Const(1),
-            // The derivative of a sum of expressions is the sum of the expressions' derivatives
-            Expr::Sum(v) => Expr::Sum(v.iter().map(|x| x.derivative()).collect()),
-            // The derivative of a negative expression is the negative of the derivative of the
-            // expression
-            Expr::Neg(e) => Expr::Neg(Box::new(e.derivative())),
-            // Product rule (ab)' = a'b + ab'
-            Expr::Prod(v) => {
-                let a = &v[0];
-                let b = Expr::Prod(v[1..].to_vec());
-
-                a.clone() * b.derivative() + b * a.derivative()
-            }
-            // x^0 = 1 so the derivative is 0
-            Expr::Pow(_, b) if matches!(**b, Expr::Const(0)) => Expr::Const(0),
-            // x^1 = x so the derivative is the derivative of x
-            Expr::Pow(a, b) if matches!(**b, Expr::Const(1)) => a.clone().derivative(),
-            // Power rule (x^a)' = ax^(a-1)
-            Expr::Pow(a, b) if matches!(**b, Expr::Const(_)) => {
-                let dec = *b.clone() - Expr::Const(1);
-                // Chain rule
-                *b.clone() * Expr::Pow(a.clone(), Box::new(dec)) * b.clone().derivative()
-            }
-            // a^b = e^(lna * b) so then the derivative is just a^b * (lna * b)'
-            Expr::Pow(a, b) => self.clone() * (a.clone().ln() * *b.clone()).derivative(),
-            // derivative of lnx is 1/x
-            Expr::Ln(x) => x.clone().derivative() * Expr::Pow(x.clone(), Box::new(Expr::Const(-1))),
-            Expr::Sin(x) => x.clone().derivative() * Expr::Cos(x.clone()),
-            Expr::Cos(x) => x.clone().derivative() * -Expr::Sin(x.clone()),
-            Expr::Arcsin(x) => {
-                x.clone().derivative()
-                    * Expr::Pow(
-                        Box::new(-(*x.clone() * *x.clone() + 1)),
-                        Box::new(Expr::Const(1) / 2),
-                    )
-            }
-            Expr::Arccos(x) => {
-                x.clone().derivative()
-                    * -Expr::Pow(
-                        Box::new(-(*x.clone() * *x.clone() + 1)),
-                        Box::new(Expr::Const(1) / 2),
-                    )
-            }
-            Expr::Arctan(x) => {
-                x.clone().derivative()
-                    * Expr::Pow(
-                        Box::new((*x.clone() * *x.clone()) + 1),
-                        Box::new(Expr::Const(-1)),
-                    )
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn latex() {
-        let mut e = Expr::X;
-        e += Expr::X * Expr::Const(5);
-        e /= Expr::X;
-
-        //assert_eq!(e.to_latex(), "(x+x(5))x^{-1}");
-    }
-
     #[test]
     fn simplification() {
         // Singleton test
