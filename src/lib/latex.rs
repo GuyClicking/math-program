@@ -14,11 +14,9 @@ impl Expr {
                 let mut str = v[0].to_latex();
                 for e in v.iter().skip(1) {
                     if let Expr::Neg(e) = e {
-                        str += "-";
-                        str += &e.to_latex();
+                        str += &format!("-{}", e.to_latex()).to_string();
                     } else {
-                        str += "+";
-                        str += &e.to_latex();
+                        str += &format!("+{}", e.to_latex()).to_string();
                     }
                 }
                 str
@@ -44,9 +42,7 @@ impl Expr {
                                 continue;
                             }
                         }
-                        str += "(";
-                        str += &e.to_latex();
-                        str += ")";
+                        str += &format!("({})", e.to_latex()).to_string();
                     } else {
                         str += &e.to_latex();
                     }
@@ -54,7 +50,12 @@ impl Expr {
                 str
             }
             Expr::Pow(a, b) => {
-                format!("({})^{{{}}}", &a.to_latex(), &b.to_latex())
+                let a_str = if matches!(**a, Expr::Sum(_)) || matches!(**a, Expr::Prod(_)) || matches!(**a, Expr::Neg(_)) {
+                    format!("({})", &a.to_latex())
+                } else {
+                    a.to_latex()
+                };
+                format!("{}^{{{}}}", a_str, &b.to_latex())
             }
             Expr::Ln(x) => {
                 format!("ln({})", &x.to_latex())

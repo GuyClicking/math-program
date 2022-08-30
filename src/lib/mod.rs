@@ -7,6 +7,7 @@
 mod derivative;
 mod latex;
 mod operations;
+mod simplify;
 
 type Num = isize;
 
@@ -24,7 +25,8 @@ pub enum Expr {
     Sum(Vec<Expr>),
     /// The product of each expression in the vector.
     Prod(Vec<Expr>),
-    /// The negative value of the expression.
+    /// The negative value of the expression. This may be removed and replaced with multiplying by
+    /// -1
     Neg(Box<Expr>),
     /// One expression to the power of another (a^b)
     Pow(Box<Expr>, Box<Expr>),
@@ -69,129 +71,6 @@ impl Expr {
     /// Get the cos of an expression
     pub fn cos(self) -> Self {
         Expr::Cos(Box::new(self))
-    }
-}
-
-impl Expr {
-    /// Apply all simplification techniques to an expression (INCOMPLETE!)
-    ///
-    /// List of applied simplifications:
-    /// [`Expr::simplify_terms`]
-    /// [`Expr::simplify_singleton`]
-    /// [`Expr::simplify_zero_pow`]
-    /// [`Expr::simplify_one_pow`]
-    /// [`Expr::simplify_negative_consts`]
-    pub fn simplify(&mut self) {
-        match self {
-            Expr::Sum(_) => {
-                // Simplify all of the terms in the sum first, then simplify the whole sum
-                self.simplify_terms();
-
-                self.simplify_singleton();
-            }
-            Expr::Prod(_) => {
-                // Simplify all of the terms
-                self.simplify_terms();
-
-                self.simplify_singleton();
-            }
-            Expr::Pow(_, _) => {
-                self.simplify_terms();
-
-                self.simplify_zero_pow();
-                self.simplify_one_pow();
-            }
-            Expr::Neg(_) => {
-                self.simplify_negative_consts();
-            }
-            // Dont do this!
-            _ => (),
-        };
-        match self {
-            Expr::Sum(v) => {
-                v.sort();
-            }
-            Expr::Prod(v) => {
-                v.sort();
-            }
-            _ => (),
-        };
-    }
-
-    /// This function simplifies all of the terms in an expression. For example, it may simplify
-    /// all terms in a sum.
-    pub fn simplify_terms(&mut self) {
-        match self {
-            Expr::Sum(v) => {
-                for e in v.iter_mut() {
-                    e.simplify();
-                }
-            }
-            Expr::Prod(v) => {
-                for e in v.iter_mut() {
-                    e.simplify();
-                }
-            }
-            Expr::Pow(a, b) => {
-                a.simplify();
-                b.simplify();
-            }
-            Expr::Neg(x) => {
-                x.simplify();
-            }
-            _ => (),
-        }
-    }
-
-    /// This function turns sums or products with a singular term into just their term.
-    pub fn simplify_singleton(&mut self) {
-        match self {
-            Expr::Sum(v) => {
-                if v.is_empty() {
-                    *self = Expr::Const(0);
-                } else if v.len() == 1 {
-                    // I feel like I shouldn't use an unwrap but len == 1
-                    *self = v.first().unwrap().clone();
-                }
-            }
-            Expr::Prod(v) => {
-                if v.is_empty() {
-                    *self = Expr::Const(0);
-                } else if v.len() == 1 {
-                    *self = v.first().unwrap().clone();
-                }
-            }
-            _ => (),
-        }
-    }
-
-    /// This function turns expressions to the power of 0 to 1
-    /// e.g. `x^0 = 1`
-    pub fn simplify_zero_pow(&mut self) {
-        if let Expr::Pow(_, b) = self {
-            if **b == Expr::Const(0) {
-                *self = Expr::Const(1);
-            }
-        }
-    }
-
-    /// This function turns expressions to the power of 1 to x
-    /// e.g. `x^x = x`
-    pub fn simplify_one_pow(&mut self) {
-        if let Expr::Pow(a, b) = self {
-            if **b == Expr::Const(1) {
-                *self = *a.clone();
-            }
-        }
-    }
-
-    /// This function turns expressions of the form `Neg(Const(x))` into Const(-x).
-    pub fn simplify_negative_consts(&mut self) {
-        if let Expr::Neg(x) = self {
-            if let Expr::Const(c) = **x {
-                *self = Expr::Const(-c);
-            }
-        }
     }
 }
 
