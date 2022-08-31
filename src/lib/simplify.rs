@@ -21,11 +21,15 @@ impl Expr {
             Expr::X => (),
             Expr::Sum(_) => {
                 self.simplify_singleton();
+                self.simplify_sum_in_sum();
+                self.simplify_add_consts();
                 self.simplify_plus_zero();
             }
             Expr::Prod(_) => {
                 self.simplify_singleton();
+                self.simplify_prod_in_prod();
                 self.simplify_times_zero();
+                self.simplify_multiply_consts();
             }
             Expr::Neg(_) => {
                 self.simplify_negative_consts();
@@ -181,22 +185,73 @@ impl Expr {
 
     /// This function removes zeros from sums
     pub fn simplify_plus_zero(&mut self) {
-        if let Expr::Sum(_) = self {
-            todo!()
+        if let Expr::Sum(v) = self {
+            v.retain(|e| e != &Expr::Const(0));
+            self.simplify_singleton();
         }
     }
 
     /// This function adds constants in a sum together
     pub fn simplify_add_consts(&mut self) {
-        if let Expr::Sum(_) = self {
-            todo!();
+        if let Expr::Sum(v) = self {
+            let mut total = 0;
+            v.retain(|e| {
+                if let Expr::Const(val) = e {
+                    total += val;
+                    false
+                } else {
+                    true
+                }
+            });
+            *self += Expr::Const(total);
         }
     }
 
     /// This function multiplies constants in a sum together
     pub fn simplify_multiply_consts(&mut self) {
-        if let Expr::Prod(_) = self {
-            todo!();
+        if let Expr::Prod(v) = self {
+            let mut total = 1;
+            v.retain(|e| {
+                if let Expr::Const(val) = e {
+                    total *= val;
+                    false
+                } else {
+                    true
+                }
+            });
+            *self *= Expr::Const(total);
+        }
+    }
+
+    /// This function turns sums which contain sums into just one singular sum.
+    pub fn simplify_sum_in_sum(&mut self) {
+        if let Expr::Sum(v) = self {
+            let mut append = Vec::new();
+            v.retain_mut(|e| {
+                if let Expr::Sum(v2) = e {
+                    append.append(v2);
+                    false
+                } else {
+                    true
+                }
+            });
+            v.append(&mut append);
+        }
+    }
+
+    /// This function turns products which contain products into just one singular product.
+    pub fn simplify_prod_in_prod(&mut self) {
+        if let Expr::Prod(v) = self {
+            let mut append = Vec::new();
+            v.retain_mut(|e| {
+                if let Expr::Prod(v2) = e {
+                    append.append(v2);
+                    false
+                } else {
+                    true
+                }
+            });
+            v.append(&mut append);
         }
     }
 }

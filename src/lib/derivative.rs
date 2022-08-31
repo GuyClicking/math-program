@@ -43,10 +43,10 @@ impl Expr {
             Expr::Sin(x) => Expr::Cos(x.clone()) * x.derivative(),
             Expr::Cos(x) => -Expr::Sin(x.clone()) * x.derivative(),
             Expr::Arcsin(x) => {
-                (1-x.clone().pow(Expr::Const(2))).pow(Expr::Const(1) / 2) * x.derivative()
+                (1 - x.clone().pow(Expr::Const(2))).pow(Expr::Const(1) / 2) * x.derivative()
             }
             Expr::Arccos(x) => {
-                -(1-x.clone().pow(Expr::Const(2))).pow(Expr::Const(1) / 2) * x.derivative()
+                -(1 - x.clone().pow(Expr::Const(2))).pow(Expr::Const(1) / 2) * x.derivative()
             }
             Expr::Arctan(x) => 1 / (1 + x.clone().pow(Expr::Const(2))) * x.derivative(),
         }

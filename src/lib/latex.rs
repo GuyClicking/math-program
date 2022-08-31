@@ -50,7 +50,10 @@ impl Expr {
                 str
             }
             Expr::Pow(a, b) => {
-                let a_str = if matches!(**a, Expr::Sum(_)) || matches!(**a, Expr::Prod(_)) || matches!(**a, Expr::Neg(_)) {
+                let a_str = if matches!(**a, Expr::Sum(_))
+                    || matches!(**a, Expr::Prod(_))
+                    || matches!(**a, Expr::Neg(_))
+                {
                     format!("({})", &a.to_latex())
                 } else {
                     a.to_latex()
